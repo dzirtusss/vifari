@@ -1,15 +1,28 @@
----@diagnostic disable-next-line: undefined-global
-local hs = hs
+local obj = {}
+obj.__index = obj
 
-local safariFilter = hs.window.filter.new("Safari")
-local eventLoop = nil
-local menuBarItem = hs.menubar.new()
+--------------------------------------------------------------------------------
+--- metadata
+--------------------------------------------------------------------------------
+
+obj.name = "vifari"
+obj.version = "0.0.1"
+obj.author = "Sergey Tarasov <dzirtusss@gmail.com>"
+obj.homepage = "https://github.com/dzirtusss/vifari"
+obj.license = "MIT - https://opensource.org/licenses/MIT"
+
+--------------------------------------------------------------------------------
+--- config
+
+local safariFilter = nil
+local eventLoop
+local menuBarItem
 
 --------------------------------------------------------------------------------
 -- helper functions
 --------------------------------------------------------------------------------
 
-local showLogs = true
+local showLogs = false
 
 local function logWithTimestamp(message)
   if not showLogs then return end
@@ -188,7 +201,8 @@ local function findClickableElements(element, visibleArea, withUrls)
   local role = element:attributeValue("AXRole")
 
   if role == "AXLink" or role == "AXButton" or role == "AXPopUpButton" or
-      role == "AXComboBox" or role == "AXTextField" or role == "AXMenuItem" then
+      role == "AXComboBox" or role == "AXTextField" or role == "AXMenuItem" or
+      role == "AXTextArea" then
     local hidden = element:attributeValue("AXHidden")
 
     if not hidden and isPartiallyVisible(element, visibleArea) then
@@ -273,7 +287,7 @@ local function clickMark(mark, mode)
 end
 
 --------------------------------------------------------------------------------
---- vimafari
+--- vifari
 --------------------------------------------------------------------------------
 
 local simpleMapping = {
@@ -456,5 +470,22 @@ local function onWindowUnfocused()
   setMode("X")
 end
 
-safariFilter:subscribe(hs.window.filter.windowFocused, onWindowFocused)
-safariFilter:subscribe(hs.window.filter.windowUnfocused, onWindowUnfocused)
+function obj:start()
+  menuBarItem = hs.menubar.new()
+  safariFilter = hs.window.filter.new("Safari")
+  safariFilter:subscribe(hs.window.filter.windowFocused, onWindowFocused)
+  safariFilter:subscribe(hs.window.filter.windowUnfocused, onWindowUnfocused)
+end
+
+function obj:stop()
+  if safariFilter then
+    safariFilter:unsubscribe(onWindowFocused)
+    safariFilter:unsubscribe(onWindowUnfocused)
+    safariFilter = nil
+  end
+  if menuBarItem then
+    menuBarItem:delete()
+  end
+end
+
+return obj

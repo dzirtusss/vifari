@@ -94,6 +94,32 @@ function current.axWebArea()
   return cached.axWebArea
 end
 
+function current.visibleArea()
+  if cached.visibleArea then return cached.visibleArea end
+
+  local winFrame = current.axWindow():attributeValue("AXFrame")
+  local webFrame = current.axWebArea():attributeValue("AXFrame")
+  local scrollFrame = current.axScrollArea():attributeValue("AXFrame")
+
+  -- TODO: sometimes it overlaps on scrollbars, need fixing logic on wide pages
+  -- TDDO: doesn't work in fullscreen mode as well
+
+  local visibleX = math.max(winFrame.x, webFrame.x)
+  local visibleY = math.max(winFrame.y, scrollFrame.y)
+
+  local visibleWidth = math.min(winFrame.x + winFrame.w, webFrame.x + webFrame.w) - visibleX
+  local visibleHeight = math.min(winFrame.y + winFrame.h, webFrame.y + webFrame.h) - visibleY
+
+  cached.visibleArea = {
+    x = visibleX,
+    y = visibleY,
+    w = visibleWidth,
+    h = visibleHeight
+  }
+
+  return cached.visibleArea
+end
+
 local function isEditableControlInFocus()
   if current.axFocusedElement() then
     return tblContains(config.axEditableRoles, current.axFocusedElement():attributeValue("AXRole"))
@@ -152,14 +178,18 @@ function action.openUrlInNewTab(url)
   hs.osascript.applescript(script)
 end
 
-function action.copyUrlToClipboard()
-  local url = current.axWebArea():attributeValue("AXURL").url
+function action.pasteUrl(url)
   if url then
     hs.pasteboard.setContents(url)
-    hs.alert.show("Copied URL: " .. url, nil, nil, 4)
+    hs.alert.show("Pasted URL: " .. url, nil, nil, 4)
   else
     hs.alert.show("Failed to get URL", nil, nil, 4)
   end
+end
+
+function action.copyUrlToClipboard()
+  local axURL = current.axWebArea():attributeValue("AXURL")
+  action.pasteUrl(axURL.url)
 end
 
 function action.doForcedUnfocus()
@@ -181,8 +211,11 @@ function marks.clear()
   marks.data = {}
 end
 
-local function drawMark(markIndex, visibleArea)
+function marks.drawOne(markIndex)
   local mark = marks.data[markIndex]
+  local visibleArea = current.visibleArea()
+  local canvas = marks.canvas
+
   if not mark then return end
   if not marks.canvas then return end
 
@@ -204,7 +237,7 @@ local function drawMark(markIndex, visibleArea)
     fillColor = { ["red"] = 0.5, ["green"] = 1, ["blue"] = 0, ["alpha"] = 1 }
   end
 
-  marks.canvas:appendElements({
+  canvas:appendElements({
     type = "rectangle",
     fillColor = fillColor,
     strokeColor = { ["red"] = 0, ["green"] = 0, ["blue"] = 0, ["alpha"] = 1 },
@@ -213,7 +246,7 @@ local function drawMark(markIndex, visibleArea)
     frame = { x = bgRect.x - visibleArea.x, y = bgRect.y - visibleArea.y, w = bgRect.w, h = bgRect.h }
   })
 
-  marks.canvas:appendElements({
+  canvas:appendElements({
     type = "text",
     text = allCombinations[markIndex],
     textAlignment = "center",
@@ -224,9 +257,8 @@ local function drawMark(markIndex, visibleArea)
   })
 end
 
-function marks.draw(visibleArea)
-  marks.visibleArea = visibleArea
-  marks.canvas = hs.canvas.new(visibleArea)
+function marks.draw()
+  marks.canvas = hs.canvas.new(current.visibleArea())
 
   -- area testing
   -- marksCanvas:appendElements({
@@ -238,7 +270,7 @@ function marks.draw(visibleArea)
   -- })
 
   for i, _ in ipairs(marks.data) do
-    drawMark(i, visibleArea)
+    marks.drawOne(i)
   end
 
   -- marksCanvas:bringToFront(true)
@@ -249,11 +281,13 @@ function marks.add(element)
   table.insert(marks.data, { element = element })
 end
 
-local function isPartiallyVisible(element, visibleArea)
+function marks.isElementPartiallyVisible(element)
   if element:attributeValue("AXHidden") then return false end
 
   local frame = element:attributeValue("AXFrame")
   if not frame then return false end
+
+  local visibleArea = current.visibleArea()
 
   local xOverlap = (frame.x < visibleArea.x + visibleArea.w) and (frame.x + frame.w > visibleArea.x)
   local yOverlap = (frame.y < visibleArea.y + visibleArea.h) and (frame.y + frame.h > visibleArea.y)
@@ -261,11 +295,11 @@ local function isPartiallyVisible(element, visibleArea)
   return xOverlap and yOverlap
 end
 
-local function findClickableElements(element, visibleArea, withUrls)
+function marks.findClickableElements(element, withUrls)
   if not element then return end
 
   local jumpable = tblContains(config.axJumpableRoles, element:attributeValue("AXRole"))
-  local visible = isPartiallyVisible(element, visibleArea)
+  local visible = marks.isElementPartiallyVisible(element)
   local showable = not withUrls or element:attributeValue("AXURL")
 
   if jumpable and visible and showable then marks.add(element) end
@@ -273,45 +307,20 @@ local function findClickableElements(element, visibleArea, withUrls)
   local children = element:attributeValue("AXChildren")
   if children then
     for _, child in ipairs(children) do
-      findClickableElements(child, visibleArea, withUrls)
+      marks.findClickableElements(child, withUrls)
     end
   end
 end
 
-local calculateVisibleArea = function(windowElement, webArea, scrollArea)
-  local winFrame = windowElement:attributeValue("AXFrame")
-  local webFrame = webArea:attributeValue("AXFrame")
-  local scrollFrame = scrollArea:attributeValue("AXFrame")
-
-  -- TODO: sometimes it overlaps on scrollbars, need fixing logic on wide pages
-  -- TDDO: doesn't work in fullscreen mode as well
-
-  local visibleX = math.max(winFrame.x, webFrame.x)
-  local visibleY = math.max(winFrame.y, scrollFrame.y)
-
-  local visibleWidth = math.min(winFrame.x + winFrame.w, webFrame.x + webFrame.w) - visibleX
-  local visibleHeight = math.min(winFrame.y + winFrame.h, webFrame.y + webFrame.h) - visibleY
-
-  local visibleArea = {
-    x = visibleX,
-    y = visibleY,
-    w = visibleWidth,
-    h = visibleHeight
-  }
-  return visibleArea
-end
-
 function marks.show(withUrls)
-  local visibleArea = calculateVisibleArea(current.axWindow(), current.axWebArea(), current.axScrollArea())
-
-  findClickableElements(current.axWebArea(), visibleArea, withUrls)
+  marks.findClickableElements(current.axWebArea(), withUrls)
   -- logWithTimestamp("Found " .. #marks .. " marks")
   -- hs.alert.show("Found " .. #marks .. " marks")
-  marks.draw(visibleArea)
+  marks.draw()
 end
 
-local function clickMark(mark, mode)
-  logWithTimestamp("clickMark")
+function marks.click(mark, mode)
+  logWithTimestamp("marks.click")
   if not mark then return end
 
   if mode == "f" then
@@ -322,6 +331,9 @@ local function clickMark(mark, mode)
   elseif mode == "t" then
     local frame = mark.element:attributeValue("AXFrame")
     hs.mouse.absolutePosition({ x = frame.x + frame.w / 2, y = frame.y + frame.h / 2 })
+  elseif mode == "yf" then
+    local axURL = mark.element:attributeValue("AXURL")
+    action.pasteUrl(axURL.url)
   end
 end
 
@@ -357,7 +369,7 @@ local function vimLoop(char)
   local mapping = simpleMapping[char]
 
   if char == "escape" then
-    if multi == "f" or multi == "F" or multi == "t" then
+    if multi == "f" or multi == "F" or multi == "t" or multi == "yf" then
       setMulti(nil)
       hs.timer.doAfter(0, marks.clear)
     elseif multi then
@@ -369,7 +381,7 @@ local function vimLoop(char)
     inEscape = false
   end
 
-  if multi == "f" or multi == "F" or multi == "t" then
+  if multi == "f" or multi == "F" or multi == "t" or multi == "yf" then
     modeFChars = modeFChars .. char:lower()
     if #modeFChars == 2 then
       -- hs.alert.show("Selected " .. modeFChars)
@@ -381,8 +393,7 @@ local function vimLoop(char)
         end
       end
       if idx then
-        local mark = marks.data[idx]
-        clickMark(mark, multi)
+        marks.click(marks.data[idx], multi)
       end
       setMulti(nil)
       hs.timer.doAfter(0, marks.clear)
@@ -404,7 +415,13 @@ local function vimLoop(char)
 
   if multi == "y" then
     setMulti(nil)
-    if char == "y" then action.copyUrlToClipboard() end
+    if char == "y" then
+      action.copyUrlToClipboard()
+    elseif char == "f" then
+      setMulti("yf")
+      modeFChars = ""
+      hs.timer.doAfter(0, function() marks.show(true) end)
+    end
     return
   end
 
@@ -442,7 +459,6 @@ local function vimLoop(char)
     action.smoothScroll(0, 500)
   elseif mapping then
     hs.eventtap.keyStroke(mapping[1], mapping[2])
-    return
   end
 end
 

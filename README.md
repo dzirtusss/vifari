@@ -81,6 +81,7 @@ q/w - prev/next tab
 [] - back and forward in history
 r - reload page
 yy - copy current page URL to clipboard
+yf - copy picked URL to clipboard
 i - enter insert mode till next escape
 g1-8 - go to tab 1-8
 g9, g$ - go to last tab

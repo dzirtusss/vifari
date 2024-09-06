@@ -13,33 +13,93 @@ obj.license = "MIT - https://opensource.org/licenses/MIT"
 
 --------------------------------------------------------------------------------
 --- config
+--------------------------------------------------------------------------------
 
-local safariFilter = nil
-local eventLoop
-local menuBarItem
+local config = {
+  doublePressDelay = 0.2, -- seconds
+  showLogs = false,
+  axEditableRoles = { "AXTextField", "AXComboBox", "AXTextArea" },
+  axJumpableRoles = { "AXLink", "AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXMenuItem", "AXTextArea" },
+}
 
 --------------------------------------------------------------------------------
 -- helper functions
 --------------------------------------------------------------------------------
 
-local showLogs = false
+local cached = {}
+local current = {}
+local action = {}
+
+local safariFilter = nil
+local eventLoop
+local menuBarItem
 
 local function logWithTimestamp(message)
-  if not showLogs then return end
+  if not config.showLogs then return end
 
   local timestamp = os.date("%Y-%m-%d %H:%M:%S")    -- Get current date and time
   local ms = math.floor(hs.timer.absoluteTime() / 1e6) % 1000
   hs.printf("[%s.%03d] %s", timestamp, ms, message) -- Print the message with the timestamp
 end
 
-local function isViModeActive()
-  local app = hs.application.get("Safari")
-  local appElement = hs.axuielement.applicationElement(app)
-  local focusedElement = appElement:attributeValue("AXFocusedUIElement")
-  if not focusedElement then return true end
+local function tblContains(tbl, val)
+  for _, v in ipairs(tbl) do
+    if v == val then return true end
+  end
+  return false
+end
 
-  local role = focusedElement:attributeValue("AXRole")
-  return role ~= "AXTextField" and role ~= "AXComboBox" and role ~= "AXTextArea"
+function current.app()
+  cached.app = cached.app or hs.application.get("Safari")
+  return cached.app
+end
+
+function current.axApp()
+  cached.axApp = cached.axApp or hs.axuielement.applicationElement(current.app())
+  return cached.axApp
+end
+
+function current.window()
+  cached.window = cached.window or current.app():mainWindow()
+  return cached.window
+end
+
+function current.axWindow()
+  cached.axWindow = cached.axWindow or hs.axuielement.windowElement(current.window())
+  return cached.axWindow
+end
+
+function current.axFocusedElement()
+  cached.axFocusedElement = cached.axFocusedElement or current.axApp():attributeValue("AXFocusedUIElement")
+  return cached.axFocusedElement
+end
+
+local function findAXRole(rootElement, role)
+  if rootElement:attributeValue("AXRole") == role then return rootElement end
+
+  for _, child in ipairs(rootElement:attributeValue("AXChildren") or {}) do
+    local result = findAXRole(child, role)
+    if result then return result end
+  end
+end
+
+function current.axScrollArea()
+  cached.axScrollArea = cached.axScrollArea or findAXRole(current.axWindow(), "AXScrollArea")
+  return cached.axScrollArea
+end
+
+-- webarea path from window: AXWindow>AXSplitGroup>AXTabGroup>AXGroup>AXGroup>AXScrollArea>AXWebArea
+function current.axWebArea()
+  cached.axWebArea = cached.axWebArea or findAXRole(current.axScrollArea(), "AXWebArea")
+  return cached.axWebArea
+end
+
+local function isEditableControlInFocus()
+  if current.axFocusedElement() then
+    return tblContains(config.axEditableRoles, current.axFocusedElement():attributeValue("AXRole"))
+  else
+    return false
+  end
 end
 
 local function isSpotlightActive()
@@ -63,7 +123,15 @@ end
 
 local allCombinations = generateCombinations()
 
-local function smoothScroll(x, y)
+local function setMode(mode)
+  menuBarItem:setTitle(mode)
+end
+
+--------------------------------------------------------------------------------
+-- actions
+--------------------------------------------------------------------------------
+
+function action.smoothScroll(x, y)
   local xstep = x / 5
   local ystep = y / 5
   hs.eventtap.event.newScrollEvent({ xstep, ystep }, {}, "pixel"):post()
@@ -71,27 +139,52 @@ local function smoothScroll(x, y)
   hs.timer.doAfter(0.01, function() hs.eventtap.event.newScrollEvent({ xstep, ystep }, {}, "pixel"):post() end)
 end
 
-local function setMode(mode)
-  menuBarItem:setTitle(mode)
+function action.openUrlInNewTab(url)
+  local script = [[
+      tell application "Safari"
+        activate
+        tell window 1
+          set current tab to (make new tab with properties {URL:"%s"})
+        end tell
+      end tell
+    ]]
+  script = string.format(script, url)
+  hs.osascript.applescript(script)
+end
+
+function action.copyUrlToClipboard()
+  local url = current.axWebArea():attributeValue("AXURL").url
+  if url then
+    hs.pasteboard.setContents(url)
+    hs.alert.show("Copied URL: " .. url, nil, nil, 4)
+  else
+    hs.alert.show("Failed to get URL", nil, nil, 4)
+  end
+end
+
+function action.doForcedUnfocus()
+  logWithTimestamp("forced unfocus on escape")
+  if current.axWebArea() then
+    current.axWebArea():setAttributeValue("AXFocused", true)
+  end
 end
 
 --------------------------------------------------------------------------------
 -- marks
 --------------------------------------------------------------------------------
 
-local marks = {}
-local marksCanvas = nil
+local marks = { data = {} }
 
-local function clearMarks()
-  if marksCanvas then marksCanvas:delete() end
-  marksCanvas = nil
-  marks = {}
+function marks.clear()
+  if marks.canvas then marks.canvas:delete() end
+  marks.canvas = nil
+  marks.data = {}
 end
 
 local function drawMark(markIndex, visibleArea)
-  local mark = marks[markIndex]
+  local mark = marks.data[markIndex]
   if not mark then return end
-  if not marksCanvas then return end
+  if not marks.canvas then return end
 
   mark.position = mark.element:attributeValue("AXFrame")
 
@@ -111,7 +204,7 @@ local function drawMark(markIndex, visibleArea)
     fillColor = { ["red"] = 0.5, ["green"] = 1, ["blue"] = 0, ["alpha"] = 1 }
   end
 
-  marksCanvas:appendElements({
+  marks.canvas:appendElements({
     type = "rectangle",
     fillColor = fillColor,
     strokeColor = { ["red"] = 0, ["green"] = 0, ["blue"] = 0, ["alpha"] = 1 },
@@ -120,7 +213,7 @@ local function drawMark(markIndex, visibleArea)
     frame = { x = bgRect.x - visibleArea.x, y = bgRect.y - visibleArea.y, w = bgRect.w, h = bgRect.h }
   })
 
-  marksCanvas:appendElements({
+  marks.canvas:appendElements({
     type = "text",
     text = allCombinations[markIndex],
     textAlignment = "center",
@@ -131,8 +224,9 @@ local function drawMark(markIndex, visibleArea)
   })
 end
 
-local function drawMarks(visibleArea)
-  marksCanvas = hs.canvas.new(visibleArea)
+function marks.draw(visibleArea)
+  marks.visibleArea = visibleArea
+  marks.canvas = hs.canvas.new(visibleArea)
 
   -- area testing
   -- marksCanvas:appendElements({
@@ -143,49 +237,21 @@ local function drawMarks(visibleArea)
   --   frame = { x = 0, y = 0, w = visibleArea.w, h = visibleArea.h }
   -- })
 
-  for i, _ in ipairs(marks) do
+  for i, _ in ipairs(marks.data) do
     drawMark(i, visibleArea)
   end
 
   -- marksCanvas:bringToFront(true)
-  marksCanvas:show()
+  marks.canvas:show()
 end
 
-local function addMark(element)
-  table.insert(marks, { element = element })
-end
-
-local axScrollArea = nil
-
--- webarea path from window: AXWindow>AXSplitGroup>AXTabGroup>AXGroup>AXGroup>AXScrollArea>AXWebArea
-local function findAXWebArea(rootElement)
-  -- Define a local recursive function to search for AXWebArea
-  local function search(element)
-    if not element then return nil end
-
-    local role = element:attributeValue("AXRole")
-    if role == "AXWebArea" then
-      return element -- Return the AXWebArea element immediately
-    elseif role == "AXScrollArea" then
-      axScrollArea = element
-    end
-
-    local children = element:attributeValue("AXChildren")
-    if children then
-      for _, child in ipairs(children) do
-        local result = search(child)
-        if result then return result end -- Stop searching as soon as AXWebArea is found
-      end
-    end
-
-    return nil -- Return nil if AXWebArea is not found
-  end
-
-  -- Start the search from the window element
-  return search(rootElement)
+function marks.add(element)
+  table.insert(marks.data, { element = element })
 end
 
 local function isPartiallyVisible(element, visibleArea)
+  if element:attributeValue("AXHidden") then return false end
+
   local frame = element:attributeValue("AXFrame")
   if not frame then return false end
 
@@ -198,21 +264,11 @@ end
 local function findClickableElements(element, visibleArea, withUrls)
   if not element then return end
 
-  local role = element:attributeValue("AXRole")
+  local jumpable = tblContains(config.axJumpableRoles, element:attributeValue("AXRole"))
+  local visible = isPartiallyVisible(element, visibleArea)
+  local showable = not withUrls or element:attributeValue("AXURL")
 
-  if role == "AXLink" or role == "AXButton" or role == "AXPopUpButton" or
-      role == "AXComboBox" or role == "AXTextField" or role == "AXMenuItem" or
-      role == "AXTextArea" then
-    local hidden = element:attributeValue("AXHidden")
-
-    if not hidden and isPartiallyVisible(element, visibleArea) then
-      if not withUrls then
-        addMark(element)
-      elseif element:attributeValue("AXURL") then
-        addMark(element)
-      end
-    end
-  end
+  if jumpable and visible and showable then marks.add(element) end
 
   local children = element:attributeValue("AXChildren")
   if children then
@@ -245,19 +301,13 @@ local calculateVisibleArea = function(windowElement, webArea, scrollArea)
   return visibleArea
 end
 
-local function showMarks(withUrls)
-  local app = hs.application.get("Safari")
-  local window = app:mainWindow()
-  if not window then return end
+function marks.show(withUrls)
+  local visibleArea = calculateVisibleArea(current.axWindow(), current.axWebArea(), current.axScrollArea())
 
-  local windowElement = hs.axuielement.windowElement(window)
-  local webAreaElement = findAXWebArea(windowElement)
-  local visibleArea = calculateVisibleArea(windowElement, webAreaElement, axScrollArea)
-
-  findClickableElements(webAreaElement, visibleArea, withUrls)
+  findClickableElements(current.axWebArea(), visibleArea, withUrls)
   -- logWithTimestamp("Found " .. #marks .. " marks")
   -- hs.alert.show("Found " .. #marks .. " marks")
-  drawMarks(visibleArea)
+  marks.draw(visibleArea)
 end
 
 local function clickMark(mark, mode)
@@ -268,18 +318,7 @@ local function clickMark(mark, mode)
     mark.element:performAction("AXPress")
   elseif mode == "F" then
     local axURL = mark.element:attributeValue("AXURL")
-    local url = axURL.url
-    -- hs.alert.show(url)
-    local script = [[
-      tell application "Safari"
-        activate
-        tell window 1
-          set current tab to (make new tab with properties {URL:"%s"})
-        end tell
-      end tell
-    ]]
-    script = string.format(script, url)
-    hs.osascript.applescript(script)
+    action.openUrlInNewTab(axURL.url)
   elseif mode == "t" then
     local frame = mark.element:attributeValue("AXFrame")
     hs.mouse.absolutePosition({ x = frame.x + frame.w / 2, y = frame.y + frame.h / 2 })
@@ -320,7 +359,7 @@ local function vimLoop(char)
   if char == "escape" then
     if multi == "f" or multi == "F" or multi == "t" then
       setMulti(nil)
-      hs.timer.doAfter(0, clearMarks)
+      hs.timer.doAfter(0, marks.clear)
     elseif multi then
       setMulti(nil)
     end
@@ -342,11 +381,11 @@ local function vimLoop(char)
         end
       end
       if idx then
-        local mark = marks[idx]
+        local mark = marks.data[idx]
         clickMark(mark, multi)
       end
       setMulti(nil)
-      hs.timer.doAfter(0, clearMarks)
+      hs.timer.doAfter(0, marks.clear)
     end
     return
   end
@@ -365,36 +404,22 @@ local function vimLoop(char)
 
   if multi == "y" then
     setMulti(nil)
-    if char == "y" then
-      local script = [[
-        tell application "Safari"
-          set currentURL to URL of front document
-          return currentURL
-        end tell
-      ]]
-      local ok, result = hs.osascript.applescript(script)
-      if ok then
-        hs.pasteboard.setContents(result)
-        hs.alert.show("Copied URL: " .. result, nil, nil, 4)
-      else
-        hs.alert.show("Failed to get URL", nil, nil, 4)
-      end
-    end
+    if char == "y" then action.copyUrlToClipboard() end
     return
   end
 
   if char == "f" then
     setMulti("f")
     modeFChars = ""
-    hs.timer.doAfter(0, showMarks)
+    hs.timer.doAfter(0, marks.show)
   elseif char == "F" then
     setMulti("F")
     modeFChars = ""
-    hs.timer.doAfter(0, function() showMarks(true) end)
+    hs.timer.doAfter(0, function() marks.show(true) end)
   elseif char == "t" then
     setMulti("t")
     modeFChars = ""
-    hs.timer.doAfter(0, showMarks)
+    hs.timer.doAfter(0, marks.show)
   elseif char == "g" then
     setMulti("g")
   elseif char == "G" then
@@ -412,20 +437,26 @@ local function vimLoop(char)
   elseif char == "l" then
     hs.eventtap.event.newScrollEvent({ -100, 0 }, {}, "pixel"):post()
   elseif char == "d" then
-    smoothScroll(0, -500)
+    action.smoothScroll(0, -500)
   elseif char == "u" then
-    smoothScroll(0, 500)
+    action.smoothScroll(0, 500)
   elseif mapping then
     hs.eventtap.keyStroke(mapping[1], mapping[2])
     return
   end
 end
 
+local lastEscape = hs.timer.absoluteTime()
+
 local function eventHandler(event)
+  cached = {}
+
   local modifiers = event:getFlags()
   if modifiers["cmd"] or modifiers["ctrl"] or modifiers["alt"] or modifiers["fn"] then
     return false
   end
+
+  if isSpotlightActive() then return false end
 
   local char = event:getCharacters()
   if event:getKeyCode() == hs.keycodes.map["escape"] then
@@ -434,7 +465,20 @@ local function eventHandler(event)
     return false
   end
 
-  if not isViModeActive() or isSpotlightActive() then return false end
+  if isEditableControlInFocus() then
+    if char == "escape" and event:getType() == hs.eventtap.event.types.keyDown then
+      local delaySinceLastEscape = (hs.timer.absoluteTime() - lastEscape) / 1e9 -- nanoseconds to seconds
+      lastEscape = hs.timer.absoluteTime()
+
+      if delaySinceLastEscape < config.doublePressDelay then
+        setMulti(nil)
+        action.doForcedUnfocus()
+        return true
+      end
+    end
+    return false
+  end
+
   if multi == "i" and char ~= "escape" then return false end
 
   if event:getType() == hs.eventtap.event.types.keyUp then return false end
@@ -462,7 +506,7 @@ local function onWindowUnfocused()
     eventLoop = nil
   end
   setMulti(nil)
-  if #marks > 0 then clearMarks() end
+  if #marks > 0 then marks.clear() end
   setMode("X")
 end
 

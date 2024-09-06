@@ -85,6 +85,7 @@ i - enter insert mode till next escape
 g1-8 - go to tab 1-8
 g9, g$ - go to last tab
 escape - exit insert mode or abort any other multi-key combination
+escape+escape (quickly) - forced unfocus from control from any place
 ```
 
 All keys with modifiers (except shift) are passed through to Safari, thus most of the
@@ -105,6 +106,11 @@ g/f/F/t/y/... - or other symbols show multi-key combination start
   visible element and then use hjkl.
 
 - `t` is very handy to switch scrollable areas on very complex pages.
+
+- some sites are using invisible non-hidden text fields (to capture custom keystrokes?), which Vifari recognizes
+  as valid text fields and auto-disables Normal mode. In such a case it helps to press `escape` so that this
+  hidden field will loose focus, and continue in Normal mode. In very hard cases, use `escape+escape` to force
+  unfocus from any place.
 
 ## Known issues
 

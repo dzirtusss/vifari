@@ -2,6 +2,8 @@
 
 Vimium/Vimari for Safari without browser extension in pure Lua.
 
+![Screnshot](https://github.com/user-attachments/assets/9054bba8-d59f-445b-a973-e4b56d15e79a)
+
 - Not a browser extension - works via accessability API, so most probably will work with
 any Safari version despite past or future Plugin API changes. Theoretically, it
 is even easily adjustable for other browsers. Works in all Safari parts - e.g. doesn't
@@ -67,6 +69,13 @@ This works rather smoothly, but may be not perfect for all cases.
 
 If you need to disable Normal mode, press `i` - it will be in Insert mode till next `escape`.
 
+If hjkl not working on some sitte, most probably it has a hidden text field to capture keystrokes (which
+is recognized by Vifari as a valid text field). Hit `escape` to unfocus normally. Or even if this doesn't
+help - `escape+escape` to force unfocus from any place.
+
+If hjkl doens't work but `f/F/t` show marks, most probably your mouse cursor is out of the scrollable area.
+Use `t` to navigate to some visible element and then use `hjkl`.
+
 If you want to totally disable Vifari do `spoons.Vifari:stop()` in hammerspoon console.
 
 ### Current binds:
@@ -86,7 +95,7 @@ i - enter insert mode till next escape
 g1-8 - go to tab 1-8
 g9, g$ - go to last tab
 escape - exit insert mode or abort any other multi-key combination
-escape+escape (quickly) - forced unfocus from control from any place
+escape+escape (quickly) - forced unfocus from any control and any place
 ```
 
 All keys with modifiers (except shift) are passed through to Safari, thus most of the
@@ -103,15 +112,17 @@ g/f/F/t/y/... - or other symbols show multi-key combination start
 
 ### Tips
 
-- If hjkl don't work, most probably mouse cursor is out of the scrollable area. Use `t` to navigate to some
-  visible element and then use hjkl.
+- If `hjkl` don't work, most probably mouse cursor is out of the scrollable area. Use `t` to navigate to some
+  visible element and then use `hjkl`.
 
-- `t` is very handy to switch scrollable areas on very complex pages.
+- `t` is very handy to switch scrollable areas on very complex pages ot to move cursot to scrollable area.
 
-- some sites are using invisible non-hidden text fields (to capture custom keystrokes?), which Vifari recognizes
+- Some sites are using invisible non-hidden text fields (to capture custom keystrokes?), which Vifari recognizes
   as valid text fields and auto-disables Normal mode. In such a case it helps to press `escape` so that this
   hidden field will loose focus, and continue in Normal mode. In very hard cases, use `escape+escape` to force
   unfocus from any place.
+
+- If something unsolvable happens - hit reload config in Hammerspoon.
 
 ## Known issues
 

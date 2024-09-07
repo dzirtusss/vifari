@@ -30,9 +30,8 @@ local cached = {}
 local current = {}
 local action = {}
 
-local safariFilter = nil
+local safariFilter
 local eventLoop
-local menuBarItem
 
 local function logWithTimestamp(message)
   if not config.showLogs then return end
@@ -149,8 +148,24 @@ end
 
 local allCombinations = generateCombinations()
 
+--------------------------------------------------------------------------------
+-- menubar
+--------------------------------------------------------------------------------
+
+local menuBar = {}
+
+function menuBar.new()
+  if menuBar.item then menuBar.delete() end
+  menuBar.item = hs.menubar.new()
+end
+
+function menuBar.delete()
+  if menuBar.item then menuBar.item:delete() end
+  menuBar.item = nil
+end
+
 local function setMode(mode)
-  menuBarItem:setTitle(mode)
+  menuBar.item:setTitle(mode)
 end
 
 --------------------------------------------------------------------------------
@@ -513,6 +528,7 @@ local function onWindowFocused()
     eventLoop = hs.eventtap.new({ hs.eventtap.event.types.keyDown, hs.eventtap.event.types.keyUp }, eventHandler):start()
   end
   setMode("V")
+  marks.clear()
 end
 
 local function onWindowUnfocused()
@@ -522,12 +538,12 @@ local function onWindowUnfocused()
     eventLoop = nil
   end
   setMulti(nil)
-  if #marks > 0 then marks.clear() end
   setMode("X")
+  marks.clear()
 end
 
 function obj:start()
-  menuBarItem = hs.menubar.new()
+  menuBar.new()
   safariFilter = hs.window.filter.new("Safari")
   safariFilter:subscribe(hs.window.filter.windowFocused, onWindowFocused)
   safariFilter:subscribe(hs.window.filter.windowUnfocused, onWindowUnfocused)
@@ -539,9 +555,7 @@ function obj:stop()
     safariFilter:unsubscribe(onWindowUnfocused)
     safariFilter = nil
   end
-  if menuBarItem then
-    menuBarItem:delete()
-  end
+  menuBar.delete()
 end
 
 return obj

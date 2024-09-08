@@ -6,7 +6,7 @@ obj.__index = obj
 --------------------------------------------------------------------------------
 
 obj.name = "vifari"
-obj.version = "0.0.1"
+obj.version = "0.0.2"
 obj.author = "Sergey Tarasov <dzirtusss@gmail.com>"
 obj.homepage = "https://github.com/dzirtusss/vifari"
 obj.license = "MIT - https://opensource.org/licenses/MIT"
@@ -55,24 +55,31 @@ local mapping = {
 local config = {
   doublePressDelay = 0.3, -- seconds
   showLogs = false,
+  mapping = mapping,
+  scrollStep = 100,
+  scrollStepHalfPage = 500,
+  smoothScroll = false,
+  smoothScrollHalfPage = true,
   axEditableRoles = { "AXTextField", "AXComboBox", "AXTextArea" },
   axJumpableRoles = { "AXLink", "AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXMenuItem", "AXTextArea" },
-  mapping = mapping,
 }
 
 --------------------------------------------------------------------------------
--- helper functions
+-- helpers
 --------------------------------------------------------------------------------
 
 local cached = {}
 local current = {}
-local action = {}
 local marks = { data = {} }
-
+local menuBar = {}
+local commands = {}
 local safariFilter
 local eventLoop
-
 local modes = { DISABLED = 1, NORMAL = 2, INSERT = 3, MULTI = 4, LINKS = 5 }
+local linkCapture
+local lastEscape = hs.timer.absoluteTime()
+local mappingPrefixes
+local allCombinations
 
 local function logWithTimestamp(message)
   if not config.showLogs then return end
@@ -178,22 +185,58 @@ end
 -- TODO: do some better logic here
 local function generateCombinations()
   local chars = "abcdefghijklmnopqrstuvwxyz"
-  local combinations = {}
+  allCombinations = {}
   for i = 1, #chars do
     for j = 1, #chars do
-      table.insert(combinations, chars:sub(i, i) .. chars:sub(j, j))
+      table.insert(allCombinations, chars:sub(i, i) .. chars:sub(j, j))
     end
   end
-  return combinations
 end
 
-local allCombinations = generateCombinations()
+local function smoothScroll(x, y, smooth)
+  if smooth then
+    local xstep = x / 5
+    local ystep = y / 5
+    hs.eventtap.event.newScrollEvent({ xstep, ystep }, {}, "pixel"):post()
+    hs.timer.doAfter(0.01, function() hs.eventtap.event.newScrollEvent({ xstep * 3, ystep * 3 }, {}, "pixel"):post() end)
+    hs.timer.doAfter(0.01, function() hs.eventtap.event.newScrollEvent({ xstep, ystep }, {}, "pixel"):post() end)
+  else
+    hs.eventtap.event.newScrollEvent({ x, y }, {}, "pixel"):post()
+  end
+end
+
+local function openUrlInNewTab(url)
+  local script = [[
+      tell application "Safari"
+        activate
+        tell window 1
+          set current tab to (make new tab with properties {URL:"%s"})
+        end tell
+      end tell
+    ]]
+  script = string.format(script, url)
+  hs.osascript.applescript(script)
+end
+
+local function pasteUrl(url)
+  if url then
+    hs.pasteboard.setContents(url)
+    hs.alert.show("Pasted URL: " .. url, nil, nil, 4)
+  else
+    hs.alert.show("Failed to get URL", nil, nil, 4)
+  end
+end
+
+local function forceUnfocus()
+  logWithTimestamp("forced unfocus on escape")
+  if current.axWebArea() then
+    current.axWebArea():setAttributeValue("AXFocused", true)
+  end
+end
 
 --------------------------------------------------------------------------------
 -- menubar
 --------------------------------------------------------------------------------
-
-local menuBar = {}
 
 function menuBar.new()
   if menuBar.item then menuBar.delete() end
@@ -209,18 +252,17 @@ local function setMode(mode, char)
   local defaultModeChars = {
     [modes.DISABLED] = "X",
     [modes.NORMAL] = "V",
-    -- [modes.ESCAPE] = "E",
   }
 
   local previousMode = current.mode
   current.mode = mode
 
   if current.mode == modes.LINKS and previousMode ~= modes.LINKS then
-    current.captureLinkMark = ""
+    linkCapture = ""
     marks.clear()
   end
   if previousMode == modes.LINKS and current.mode ~= modes.LINKS then
-    current.captureLinkMark = nil
+    linkCapture = nil
     hs.timer.doAfter(0, marks.clear)
   end
 
@@ -228,46 +270,6 @@ local function setMode(mode, char)
   if current.mode ~= modes.MULTI then current.multi = nil end
 
   menuBar.item:setTitle(char or defaultModeChars[mode] or "?")
-end
-
---------------------------------------------------------------------------------
--- actions
---------------------------------------------------------------------------------
-
-function action.smoothScroll(x, y)
-  local xstep = x / 5
-  local ystep = y / 5
-  hs.eventtap.event.newScrollEvent({ xstep, ystep }, {}, "pixel"):post()
-  hs.timer.doAfter(0.01, function() hs.eventtap.event.newScrollEvent({ xstep * 3, ystep * 3 }, {}, "pixel"):post() end)
-  hs.timer.doAfter(0.01, function() hs.eventtap.event.newScrollEvent({ xstep, ystep }, {}, "pixel"):post() end)
-end
-
-function action.openUrlInNewTab(url)
-  local script = [[
-      tell application "Safari"
-        activate
-        tell window 1
-          set current tab to (make new tab with properties {URL:"%s"})
-        end tell
-      end tell
-    ]]
-  script = string.format(script, url)
-  hs.osascript.applescript(script)
-end
-
-function action.setClipboardContents(contents)
-  if contents and hs.pasteboard.setContents(contents) then
-    hs.alert.show("Copied to clipboard: " .. contents, nil, nil, 4)
-  else
-    hs.alert.show("Failed to copy to clipboard", nil, nil, 4)
-  end
-end
-
-function action.doForcedUnfocus()
-  logWithTimestamp("forced unfocus on escape")
-  if current.axWebArea() then
-    current.axWebArea():setAttributeValue("AXFocused", true)
-  end
 end
 
 --------------------------------------------------------------------------------
@@ -399,35 +401,33 @@ end
 -- commands
 --------------------------------------------------------------------------------
 
-local commands = {}
-
 function commands.cmdScrollLeft()
-  hs.eventtap.event.newScrollEvent({ 100, 0 }, {}, "pixel"):post()
+  smoothScroll(config.scrollStep, 0, config.smoothScroll)
 end
 
 function commands.cmdScrollRight()
-  hs.eventtap.event.newScrollEvent({ -100, 0 }, {}, "pixel"):post()
+  smoothScroll(-config.scrollStep, 0, config.smoothScroll)
 end
 
 function commands.cmdScrollUp()
-  hs.eventtap.event.newScrollEvent({ 0, 100 }, {}, "pixel"):post()
+  smoothScroll(0, config.scrollStep, config.smoothScroll)
 end
 
 function commands.cmdScrollDown()
-  hs.eventtap.event.newScrollEvent({ 0, -100 }, {}, "pixel"):post()
+  smoothScroll(0, -config.scrollStep, config.smoothScroll)
 end
 
 function commands.cmdScrollHalfPageDown()
-  hs.eventtap.event.newScrollEvent({ 0, -500 }, {}, "pixel"):post()
+  smoothScroll(0, -config.scrollStepHalfPage, config.smoothScrollHalfPage)
 end
 
 function commands.cmdScrollHalfPageUp()
-  hs.eventtap.event.newScrollEvent({ 0, 500 }, {}, "pixel"):post()
+  smoothScroll(0, config.scrollStepHalfPage, config.smoothScrollHalfPage)
 end
 
 function commands.cmdCopyPageUrlToClipboard()
   local axURL = current.axWebArea():attributeValue("AXURL")
-  action.pasteUrl(axURL.url)
+  pasteUrl(axURL.url)
 end
 
 function commands.cmdInsertMode(char)
@@ -446,7 +446,7 @@ function commands.cmdGotoLinkNewTab(char)
   setMode(modes.LINKS, char)
   marks.onClickCallback = function(mark)
     local axURL = mark.element:attributeValue("AXURL")
-    action.openUrlInNewTab(axURL.url)
+    openUrlInNewTab(axURL.url)
   end
   hs.timer.doAfter(0, function() marks.show(true) end)
 end
@@ -464,7 +464,7 @@ function commands.cmdCopyLinkUrlToClipboard(char)
   setMode(modes.LINKS, char)
   marks.onClickCallback = function(mark)
     local axURL = mark.element:attributeValue("AXURL")
-    action.pasteUrl(axURL.url)
+    pasteUrl(axURL.url)
   end
   hs.timer.doAfter(0, function() marks.show(true) end)
 end
@@ -472,8 +472,6 @@ end
 --------------------------------------------------------------------------------
 --- vifari
 --------------------------------------------------------------------------------
-
-local mappingPrefixes
 
 local function fetchMappingPrefixes()
   mappingPrefixes = {}
@@ -489,16 +487,16 @@ local function vimLoop(char)
   logWithTimestamp("vimLoop " .. char)
 
   if current.mode == modes.LINKS then
-    current.captureLinkMark = current.captureLinkMark .. char:lower()
-    if #current.captureLinkMark == 2 then
+    linkCapture = linkCapture .. char:lower()
+    if #linkCapture == 2 then
+      marks.click(linkCapture)
       setMode(modes.NORMAL)
-      marks.click(current.captureLinkMark)
     end
     return
   end
 
+  if current.mode == modes.MULTI then char = current.multi .. char end
   local foundMapping = config.mapping[char]
-  if current.multi then foundMapping = config.mapping[current.multi .. char] end
 
   if foundMapping then
     setMode(modes.NORMAL)
@@ -517,26 +515,22 @@ local function vimLoop(char)
   end
 end
 
-local lastEscape
-
 local function eventHandler(event)
   cached = {}
 
-  local modifiers = event:getFlags()
-  if modifiers["cmd"] or modifiers["ctrl"] or modifiers["alt"] or modifiers["fn"] then
-    return false
+  for key, modifier in pairs(event:getFlags()) do
+    if modifier and key ~= "shift" then return false end
   end
 
   if isSpotlightActive() then return false end
 
   if event:getKeyCode() == hs.keycodes.map["escape"] then
-    local previousEscape = lastEscape
-    local currentEscape = hs.timer.absoluteTime()
-    lastEscape = currentEscape
+    local delaySinceLastEscape = (hs.timer.absoluteTime() - lastEscape) / 1e9 -- nanoseconds in seconds
+    lastEscape = hs.timer.absoluteTime()
 
-    if previousEscape and ((currentEscape - previousEscape) / 1e9 < config.doublePressDelay) then
+    if delaySinceLastEscape < config.doublePressDelay then
       setMode(modes.NORMAL)
-      action.doForcedUnfocus()
+      forceUnfocus()
       return true
     end
 
@@ -563,7 +557,6 @@ local function onWindowFocused()
     eventLoop = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, eventHandler):start()
   end
   setMode(modes.NORMAL)
-  marks.clear()
 end
 
 local function onWindowUnfocused()
@@ -572,17 +565,16 @@ local function onWindowUnfocused()
     eventLoop:stop()
     eventLoop = nil
   end
-  -- setMulti(nil)
   setMode(modes.DISABLED)
-  marks.clear()
 end
 
 function obj:start()
-  fetchMappingPrefixes()
-  menuBar.new()
   safariFilter = hs.window.filter.new("Safari")
   safariFilter:subscribe(hs.window.filter.windowFocused, onWindowFocused)
   safariFilter:subscribe(hs.window.filter.windowUnfocused, onWindowUnfocused)
+  menuBar.new()
+  fetchMappingPrefixes()
+  generateCombinations()
 end
 
 function obj:stop()

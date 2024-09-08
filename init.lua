@@ -15,11 +15,49 @@ obj.license = "MIT - https://opensource.org/licenses/MIT"
 --- config
 --------------------------------------------------------------------------------
 
+local mapping = {
+  ["i"] = "cmdInsertMode",
+  -- movements
+  ["h"] = "cmdScrollLeft",
+  ["j"] = "cmdScrollDown",
+  ["k"] = "cmdScrollUp",
+  ["l"] = "cmdScrollRight",
+  ["d"] = "cmdScrollHalfPageDown",
+  ["u"] = "cmdScrollHalfPageUp",
+  ["gg"] = { "cmd", "up" },
+  ["G"] = { "cmd", "down" },
+  -- tabs
+  ["q"] = { { "cmd", "shift" }, "[" }, -- tab left
+  ["w"] = { { "cmd", "shift" }, "]" }, -- tab right
+  ["r"] = { "cmd", "r" },              -- reload tab
+  ["x"] = { "cmd", "w" },              -- close tab
+  ["["] = { "cmd", "[" },              -- history back
+  ["]"] = { "cmd", "]" },              -- history forward
+  ["g1"] = { "cmd", "1" },
+  ["g2"] = { "cmd", "2" },
+  ["g3"] = { "cmd", "3" },
+  ["g4"] = { "cmd", "4" },
+  ["g5"] = { "cmd", "5" },
+  ["g6"] = { "cmd", "6" },
+  ["g7"] = { "cmd", "7" },
+  ["g8"] = { "cmd", "8" },
+  ["g9"] = { "cmd", "9" }, -- last tab
+  ["g$"] = { "cmd", "9" }, -- last tab
+  -- links
+  ["f"] = "cmdGotoLink",
+  ["F"] = "cmdGotoLinkNewTab",
+  ["t"] = "cmdMoveMouseToLink",
+  -- clipboard
+  ["yy"] = "cmdCopyPageUrlToClipboard",
+  ["yf"] = "cmdCopyLinkUrlToClipboard",
+}
+
 local config = {
   doublePressDelay = 0.2, -- seconds
   showLogs = false,
   axEditableRoles = { "AXTextField", "AXComboBox", "AXTextArea" },
   axJumpableRoles = { "AXLink", "AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXMenuItem", "AXTextArea" },
+  mapping = mapping,
 }
 
 --------------------------------------------------------------------------------
@@ -201,11 +239,6 @@ function action.setClipboardContents(contents)
   end
 end
 
-function action.copyCurrentUrlToClipboard()
-  local axURL = current.axWebArea():attributeValue("AXURL")
-  action.setClipboardContents(axURL.url)
-end
-
 function action.doForcedUnfocus()
   logWithTimestamp("forced unfocus on escape")
   if current.axWebArea() then
@@ -328,45 +361,57 @@ end
 
 function marks.show(withUrls)
   marks.findClickableElements(current.axWebArea(), withUrls)
-  -- logWithTimestamp("Found " .. #marks .. " marks")
-  -- hs.alert.show("Found " .. #marks .. " marks")
   marks.draw()
 end
 
-function marks.click(mark, mode)
+function marks.click(combination)
   logWithTimestamp("marks.click")
-  if not mark then return end
-
-  if mode == "f" then
-    mark.element:performAction("AXPress")
-  elseif mode == "F" then
-    local axURL = mark.element:attributeValue("AXURL")
-    action.openUrlInNewTab(axURL.url)
-  elseif mode == "t" then
-    local frame = mark.element:attributeValue("AXFrame")
-    hs.mouse.absolutePosition({ x = frame.x + frame.w / 2, y = frame.y + frame.h / 2 })
-  elseif mode == "yf" then
-    local axURL = mark.element:attributeValue("AXURL")
-    action.setClipboardContents(axURL.url)
+  for i, c in ipairs(allCombinations) do
+    if c == combination and marks.data[i] and marks.onClickCallback then
+      marks.onClickCallback(marks.data[i])
+    end
   end
 end
 
 --------------------------------------------------------------------------------
---- vifari
+-- commands
 --------------------------------------------------------------------------------
 
-local simpleMapping = {
-  ["q"] = { { "cmd", "shift" }, "[" },
-  ["w"] = { { "cmd", "shift" }, "]" },
-  ["["] = { { "cmd", }, "[" },
-  ["]"] = { { "cmd", }, "]" },
-  ["r"] = { { "cmd" }, "r" },
-  ["x"] = { { "cmd" }, "w" },
-}
+local commands = {}
 
-local multi = nil
-local modeFChars = ""
+function commands.cmdScrollLeft()
+  hs.eventtap.event.newScrollEvent({ 100, 0 }, {}, "pixel"):post()
+end
+
+function commands.cmdScrollRight()
+  hs.eventtap.event.newScrollEvent({ -100, 0 }, {}, "pixel"):post()
+end
+
+function commands.cmdScrollUp()
+  hs.eventtap.event.newScrollEvent({ 0, 100 }, {}, "pixel"):post()
+end
+
+function commands.cmdScrollDown()
+  hs.eventtap.event.newScrollEvent({ 0, -100 }, {}, "pixel"):post()
+end
+
+function commands.cmdScrollHalfPageDown()
+  hs.eventtap.event.newScrollEvent({ 0, -500 }, {}, "pixel"):post()
+end
+
+function commands.cmdScrollHalfPageUp()
+  hs.eventtap.event.newScrollEvent({ 0, 500 }, {}, "pixel"):post()
+end
+
+function commands.cmdCopyPageUrlToClipboard()
+  local axURL = current.axWebArea():attributeValue("AXURL")
+  action.pasteUrl(axURL.url)
+end
+
+local multi
+local inInsert = false
 local inEscape = false
+local captureLinkMark
 
 local function setMulti(char)
   multi = char
@@ -377,102 +422,109 @@ local function setMulti(char)
   end
 end
 
+function commands.cmdInsertMode(char)
+  setMulti(char)
+  inInsert = true
+end
+
+function commands.cmdGotoLink(char)
+  setMulti(char)
+  captureLinkMark = ""
+  marks.onClickCallback = function(mark)
+    mark.element:performAction("AXPress")
+  end
+  hs.timer.doAfter(0, marks.show)
+end
+
+function commands.cmdGotoLinkNewTab(char)
+  setMulti(char)
+  captureLinkMark = ""
+  marks.onClickCallback = function(mark)
+    local axURL = mark.element:attributeValue("AXURL")
+    action.openUrlInNewTab(axURL.url)
+  end
+  hs.timer.doAfter(0, function() marks.show(true) end)
+end
+
+function commands.cmdMoveMouseToLink(char)
+  setMulti(char)
+  captureLinkMark = ""
+  marks.onClickCallback = function(mark)
+    local frame = mark.element:attributeValue("AXFrame")
+    hs.mouse.absolutePosition({ x = frame.x + frame.w / 2, y = frame.y + frame.h / 2 })
+  end
+  hs.timer.doAfter(0, marks.show)
+end
+
+function commands.cmdCopyLinkUrlToClipboard(char)
+  setMulti(char)
+  captureLinkMark = ""
+  marks.onClickCallback = function(mark)
+    local axURL = mark.element:attributeValue("AXURL")
+    action.pasteUrl(axURL.url)
+  end
+  hs.timer.doAfter(0, function() marks.show(true) end)
+end
+
+--------------------------------------------------------------------------------
+--- vifari
+--------------------------------------------------------------------------------
+
+local mappingPrefixes
+
+local function fetchMappingPrefixes()
+  mappingPrefixes = {}
+  for k, _ in pairs(config.mapping) do
+    if #k == 2 then
+      mappingPrefixes[string.sub(k, 1, 1)] = true
+    end
+  end
+  logWithTimestamp("mappingPrefixes: " .. hs.inspect(mappingPrefixes))
+end
+
 local function vimLoop(char)
   logWithTimestamp("vimLoop " .. char)
 
-  local mapping = simpleMapping[char]
-
   if char == "escape" then
-    if multi == "f" or multi == "F" or multi == "t" or multi == "yf" then
+    if multi then
       setMulti(nil)
+      captureLinkMark = nil
       hs.timer.doAfter(0, marks.clear)
-    elseif multi then
-      setMulti(nil)
     end
     inEscape = true
+    inInsert = false
     return
   else
     inEscape = false
   end
 
-  if multi == "f" or multi == "F" or multi == "t" or multi == "yf" then
-    modeFChars = modeFChars .. char:lower()
-    if #modeFChars == 2 then
-      -- hs.alert.show("Selected " .. modeFChars)
-      local idx = nil
-      for i, combination in ipairs(allCombinations) do
-        if combination == modeFChars then
-          idx = i
-          break
-        end
-      end
-      if idx then
-        marks.click(marks.data[idx], multi)
-      end
+  if captureLinkMark then
+    captureLinkMark = captureLinkMark .. char:lower()
+    if #captureLinkMark == 2 then
+      marks.click(captureLinkMark)
       setMulti(nil)
+      captureLinkMark = nil
       hs.timer.doAfter(0, marks.clear)
     end
     return
   end
 
-  if multi == "g" then
-    setMulti(nil)
-    if char == "g" then
-      hs.eventtap.keyStroke({ "cmd" }, "up")
-    elseif char:match("%d") then
-      hs.eventtap.keyStroke({ "cmd" }, char)
-    elseif char == "$" then
-      hs.eventtap.keyStroke({ "cmd" }, "9")
-    end
-    return
-  end
+  local foundMapping = config.mapping[char]
+  if multi then foundMapping = config.mapping[multi .. char] end
 
-  if multi == "y" then
+  if foundMapping then
     setMulti(nil)
-    if char == "y" then
-      action.copyCurrentUrlToClipboard()
-    elseif char == "f" then
-      setMulti("yf")
-      modeFChars = ""
-      hs.timer.doAfter(0, function() marks.show(true) end)
+    if type(foundMapping) == "string" then
+      commands[foundMapping](char)
+    elseif type(foundMapping) == "table" then
+      hs.eventtap.keyStroke(foundMapping[1], foundMapping[2])
+    else
+      logWithTimestamp("Unknown mapping for " .. char .. " " .. hs.inspect(foundMapping))
     end
-    return
-  end
-
-  if char == "f" then
-    setMulti("f")
-    modeFChars = ""
-    hs.timer.doAfter(0, marks.show)
-  elseif char == "F" then
-    setMulti("F")
-    modeFChars = ""
-    hs.timer.doAfter(0, function() marks.show(true) end)
-  elseif char == "t" then
-    setMulti("t")
-    modeFChars = ""
-    hs.timer.doAfter(0, marks.show)
-  elseif char == "g" then
-    setMulti("g")
-  elseif char == "G" then
-    hs.eventtap.keyStroke({ "cmd" }, "down")
-  elseif char == "y" then
-    setMulti("y")
-  elseif char == "i" then
-    setMulti("i")
-  elseif char == "j" then
-    hs.eventtap.event.newScrollEvent({ 0, -100 }, {}, "pixel"):post()
-  elseif char == "k" then
-    hs.eventtap.event.newScrollEvent({ 0, 100 }, {}, "pixel"):post()
-  elseif char == "h" then
-    hs.eventtap.event.newScrollEvent({ 100, 0 }, {}, "pixel"):post()
-  elseif char == "l" then
-    hs.eventtap.event.newScrollEvent({ -100, 0 }, {}, "pixel"):post()
-  elseif char == "d" then
-    action.smoothScroll(0, -500)
-  elseif char == "u" then
-    action.smoothScroll(0, 500)
-  elseif mapping then
-    hs.eventtap.keyStroke(mapping[1], mapping[2])
+  elseif mappingPrefixes[char] then
+    setMulti(char)
+  else
+    logWithTimestamp("Unknown char " .. char)
   end
 end
 
@@ -501,6 +553,8 @@ local function eventHandler(event)
       lastEscape = hs.timer.absoluteTime()
 
       if delaySinceLastEscape < config.doublePressDelay then
+        inInsert = false
+        inEscape = false
         setMulti(nil)
         action.doForcedUnfocus()
         return true
@@ -509,7 +563,7 @@ local function eventHandler(event)
     return false
   end
 
-  if multi == "i" and char ~= "escape" then return false end
+  if inInsert and char ~= "escape" then return false end
 
   if event:getType() == hs.eventtap.event.types.keyUp then return false end
 
@@ -542,6 +596,7 @@ local function onWindowUnfocused()
 end
 
 function obj:start()
+  fetchMappingPrefixes()
   menuBar.new()
   safariFilter = hs.window.filter.new("Safari")
   safariFilter:subscribe(hs.window.filter.windowFocused, onWindowFocused)

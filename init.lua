@@ -53,7 +53,7 @@ local mapping = {
 }
 
 local config = {
-  doublePressDelay = 0.2, -- seconds
+  doublePressDelay = 0.3, -- seconds
   showLogs = false,
   axEditableRoles = { "AXTextField", "AXComboBox", "AXTextArea" },
   axJumpableRoles = { "AXLink", "AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXMenuItem", "AXTextArea" },
@@ -67,9 +67,12 @@ local config = {
 local cached = {}
 local current = {}
 local action = {}
+local marks = { data = {} }
 
 local safariFilter
 local eventLoop
+
+local modes = { DISABLED = 1, NORMAL = 2, INSERT = 3, MULTI = 4, LINKS = 5 }
 
 local function logWithTimestamp(message)
   if not config.showLogs then return end
@@ -202,8 +205,29 @@ function menuBar.delete()
   menuBar.item = nil
 end
 
-local function setMode(mode)
-  menuBar.item:setTitle(mode)
+local function setMode(mode, char)
+  local defaultModeChars = {
+    [modes.DISABLED] = "X",
+    [modes.NORMAL] = "V",
+    -- [modes.ESCAPE] = "E",
+  }
+
+  local previousMode = current.mode
+  current.mode = mode
+
+  if current.mode == modes.LINKS and previousMode ~= modes.LINKS then
+    current.captureLinkMark = ""
+    marks.clear()
+  end
+  if previousMode == modes.LINKS and current.mode ~= modes.LINKS then
+    current.captureLinkMark = nil
+    hs.timer.doAfter(0, marks.clear)
+  end
+
+  if current.mode == modes.MULTI then current.multi = char end
+  if current.mode ~= modes.MULTI then current.multi = nil end
+
+  menuBar.item:setTitle(char or defaultModeChars[mode] or "?")
 end
 
 --------------------------------------------------------------------------------
@@ -249,8 +273,6 @@ end
 --------------------------------------------------------------------------------
 -- marks
 --------------------------------------------------------------------------------
-
-local marks = { data = {} }
 
 function marks.clear()
   if marks.canvas then marks.canvas:delete() end
@@ -408,28 +430,12 @@ function commands.cmdCopyPageUrlToClipboard()
   action.pasteUrl(axURL.url)
 end
 
-local multi
-local inInsert = false
-local inEscape = false
-local captureLinkMark
-
-local function setMulti(char)
-  multi = char
-  if multi then
-    setMode(multi)
-  else
-    setMode("V")
-  end
-end
-
 function commands.cmdInsertMode(char)
-  setMulti(char)
-  inInsert = true
+  setMode(modes.INSERT, char)
 end
 
 function commands.cmdGotoLink(char)
-  setMulti(char)
-  captureLinkMark = ""
+  setMode(modes.LINKS, char)
   marks.onClickCallback = function(mark)
     mark.element:performAction("AXPress")
   end
@@ -437,8 +443,7 @@ function commands.cmdGotoLink(char)
 end
 
 function commands.cmdGotoLinkNewTab(char)
-  setMulti(char)
-  captureLinkMark = ""
+  setMode(modes.LINKS, char)
   marks.onClickCallback = function(mark)
     local axURL = mark.element:attributeValue("AXURL")
     action.openUrlInNewTab(axURL.url)
@@ -447,8 +452,7 @@ function commands.cmdGotoLinkNewTab(char)
 end
 
 function commands.cmdMoveMouseToLink(char)
-  setMulti(char)
-  captureLinkMark = ""
+  setMode(modes.LINKS, char)
   marks.onClickCallback = function(mark)
     local frame = mark.element:attributeValue("AXFrame")
     hs.mouse.absolutePosition({ x = frame.x + frame.w / 2, y = frame.y + frame.h / 2 })
@@ -457,8 +461,7 @@ function commands.cmdMoveMouseToLink(char)
 end
 
 function commands.cmdCopyLinkUrlToClipboard(char)
-  setMulti(char)
-  captureLinkMark = ""
+  setMode(modes.LINKS, char)
   marks.onClickCallback = function(mark)
     local axURL = mark.element:attributeValue("AXURL")
     action.pasteUrl(axURL.url)
@@ -485,35 +488,21 @@ end
 local function vimLoop(char)
   logWithTimestamp("vimLoop " .. char)
 
-  if char == "escape" then
-    if multi then
-      setMulti(nil)
-      captureLinkMark = nil
-      hs.timer.doAfter(0, marks.clear)
-    end
-    inEscape = true
-    inInsert = false
-    return
-  else
-    inEscape = false
-  end
-
-  if captureLinkMark then
-    captureLinkMark = captureLinkMark .. char:lower()
-    if #captureLinkMark == 2 then
-      marks.click(captureLinkMark)
-      setMulti(nil)
-      captureLinkMark = nil
-      hs.timer.doAfter(0, marks.clear)
+  if current.mode == modes.LINKS then
+    current.captureLinkMark = current.captureLinkMark .. char:lower()
+    if #current.captureLinkMark == 2 then
+      setMode(modes.NORMAL)
+      marks.click(current.captureLinkMark)
     end
     return
   end
 
   local foundMapping = config.mapping[char]
-  if multi then foundMapping = config.mapping[multi .. char] end
+  if current.multi then foundMapping = config.mapping[current.multi .. char] end
 
   if foundMapping then
-    setMulti(nil)
+    setMode(modes.NORMAL)
+
     if type(foundMapping) == "string" then
       commands[foundMapping](char)
     elseif type(foundMapping) == "table" then
@@ -522,13 +511,13 @@ local function vimLoop(char)
       logWithTimestamp("Unknown mapping for " .. char .. " " .. hs.inspect(foundMapping))
     end
   elseif mappingPrefixes[char] then
-    setMulti(char)
+    setMode(modes.MULTI, char)
   else
     logWithTimestamp("Unknown char " .. char)
   end
 end
 
-local lastEscape = hs.timer.absoluteTime()
+local lastEscape
 
 local function eventHandler(event)
   cached = {}
@@ -540,37 +529,30 @@ local function eventHandler(event)
 
   if isSpotlightActive() then return false end
 
-  local char = event:getCharacters()
   if event:getKeyCode() == hs.keycodes.map["escape"] then
-    char = "escape"
-  elseif not char:match("[%a%d%[%]%$]") then
-    return false
-  end
+    local previousEscape = lastEscape
+    local currentEscape = hs.timer.absoluteTime()
+    lastEscape = currentEscape
 
-  if isEditableControlInFocus() then
-    if char == "escape" and event:getType() == hs.eventtap.event.types.keyDown then
-      local delaySinceLastEscape = (hs.timer.absoluteTime() - lastEscape) / 1e9 -- nanoseconds to seconds
-      lastEscape = hs.timer.absoluteTime()
-
-      if delaySinceLastEscape < config.doublePressDelay then
-        inInsert = false
-        inEscape = false
-        setMulti(nil)
-        action.doForcedUnfocus()
-        return true
-      end
+    if previousEscape and ((currentEscape - previousEscape) / 1e9 < config.doublePressDelay) then
+      setMode(modes.NORMAL)
+      action.doForcedUnfocus()
+      return true
     end
+
+    if current.mode ~= modes.NORMAL then
+      setMode(modes.NORMAL)
+      return true
+    end
+
     return false
   end
 
-  if inInsert and char ~= "escape" then return false end
+  if current.mode == modes.INSERT or isEditableControlInFocus() then return false end
 
-  if event:getType() == hs.eventtap.event.types.keyUp then return false end
+  local char = event:getCharacters()
+  if not char:match("[%a%d%[%]%$]") then return false end
 
-  if char == "escape" and inEscape then return false end
-
-  -- hs.alert.show(char)
-  logWithTimestamp("eventhandler " .. char)
   hs.timer.doAfter(0, function() vimLoop(char) end)
   return true
 end
@@ -578,9 +560,9 @@ end
 local function onWindowFocused()
   logWithTimestamp("onWindowFocused")
   if not eventLoop then
-    eventLoop = hs.eventtap.new({ hs.eventtap.event.types.keyDown, hs.eventtap.event.types.keyUp }, eventHandler):start()
+    eventLoop = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, eventHandler):start()
   end
-  setMode("V")
+  setMode(modes.NORMAL)
   marks.clear()
 end
 
@@ -590,8 +572,8 @@ local function onWindowUnfocused()
     eventLoop:stop()
     eventLoop = nil
   end
-  setMulti(nil)
-  setMode("X")
+  -- setMulti(nil)
+  setMode(modes.DISABLED)
   marks.clear()
 end
 

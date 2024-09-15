@@ -193,18 +193,17 @@ function action.openUrlInNewTab(url)
   hs.osascript.applescript(script)
 end
 
-function action.pasteUrl(url)
-  if url then
-    hs.pasteboard.setContents(url)
-    hs.alert.show("Pasted URL: " .. url, nil, nil, 4)
+function action.setClipboardContents(contents)
+  if contents and hs.pasteboard.setContents(contents) then
+    hs.alert.show("Copied to clipboard: " .. contents, nil, nil, 4)
   else
-    hs.alert.show("Failed to get URL", nil, nil, 4)
+    hs.alert.show("Failed to copy to clipboard", nil, nil, 4)
   end
 end
 
-function action.copyUrlToClipboard()
+function action.copyCurrentUrlToClipboard()
   local axURL = current.axWebArea():attributeValue("AXURL")
-  action.pasteUrl(axURL.url)
+  action.setClipboardContents(axURL.url)
 end
 
 function action.doForcedUnfocus()
@@ -348,7 +347,7 @@ function marks.click(mark, mode)
     hs.mouse.absolutePosition({ x = frame.x + frame.w / 2, y = frame.y + frame.h / 2 })
   elseif mode == "yf" then
     local axURL = mark.element:attributeValue("AXURL")
-    action.pasteUrl(axURL.url)
+    action.setClipboardContents(axURL.url)
   end
 end
 
@@ -431,7 +430,7 @@ local function vimLoop(char)
   if multi == "y" then
     setMulti(nil)
     if char == "y" then
-      action.copyUrlToClipboard()
+      action.copyCurrentUrlToClipboard()
     elseif char == "f" then
       setMulti("yf")
       modeFChars = ""

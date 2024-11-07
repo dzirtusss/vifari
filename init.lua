@@ -31,6 +31,8 @@ local mapping = {
   ["w"] = { { "cmd", "shift" }, "]" }, -- tab right
   ["r"] = { "cmd", "r" },              -- reload tab
   ["x"] = { "cmd", "w" },              -- close tab
+  ["t"] = { "cmd", "t" },              -- new tab
+  ["o"] = { "cmd", "l" },              -- open
   ["["] = { "cmd", "[" },              -- history back
   ["]"] = { "cmd", "]" },              -- history forward
   ["g1"] = { "cmd", "1" },
@@ -46,7 +48,9 @@ local mapping = {
   -- links
   ["f"] = "cmdGotoLink",
   ["F"] = "cmdGotoLinkNewTab",
-  ["t"] = "cmdMoveMouseToLink",
+  ["gf"] = "cmdMoveMouseToLink",
+  -- mouse
+  ["zz"] = "cmdMoveMouseToCenter",
   -- clipboard
   ["yy"] = "cmdCopyPageUrlToClipboard",
   ["yf"] = "cmdCopyLinkUrlToClipboard",
@@ -458,6 +462,13 @@ function commands.cmdMoveMouseToLink(char)
     hs.mouse.absolutePosition({ x = frame.x + frame.w / 2, y = frame.y + frame.h / 2 })
   end
   hs.timer.doAfter(0, marks.show)
+end
+
+function commands.cmdMoveMouseToCenter()
+  hs.mouse.absolutePosition({
+    x = current.visibleArea().x + current.visibleArea().w / 2,
+    y = current.visibleArea().y + current.visibleArea().h / 2
+  })
 end
 
 function commands.cmdCopyLinkUrlToClipboard(char)

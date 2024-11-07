@@ -79,23 +79,41 @@ Use `t` to navigate to some visible element and then use `hjkl`.
 If you want to totally disable Vifari do `spoons.Vifari:stop()` in hammerspoon console.
 
 ### Current binds:
+
+View top of `init.lua` for full list of binds. Fully customizable.
+
 ```
+# mode switching
+i - enter insert mode till next escape
+escape - exit insert mode or abort any other multi-key combination
+escape+escape (quickly) - forced unfocus from any control and any place
+
+# movements
 h/j/k/l - scroll left/down/up/right
 u/d - scroll half page up/down
 gg/G - scroll to top/bottom
+
+# links/jumps
 f - show marks and jump in same window
 F - show marks and jump in new window
-t - show marks and move mouse to the mark
+gf - show marks and move mouse to the mark
+
+# tabs
 q/w - prev/next tab
-[] - back and forward in history
 r - reload page
-yy - copy current page URL to clipboard
-yf - copy picked URL to clipboard
-i - enter insert mode till next escape
+x - close tab
+t - new tab
+o - open
+[] - back and forward in history
 g1-8 - go to tab 1-8
 g9, g$ - go to last tab
-escape - exit insert mode or abort any other multi-key combination
-escape+escape (quickly) - forced unfocus from any control and any place
+
+# mouse
+zz - move mouse to center
+
+# clipboard
+yy - copy current page URL to clipboard
+yf - copy picked URL to clipboard
 ```
 
 All keys with modifiers (except shift) are passed through to Safari, thus most of the
@@ -115,7 +133,7 @@ g/f/F/t/y/... - or other symbols show multi-key combination start
 - If `hjkl` don't work, most probably mouse cursor is out of the scrollable area. Use `t` to navigate to some
   visible element and then use `hjkl`.
 
-- `t` is very handy to switch scrollable areas on very complex pages ot to move cursot to scrollable area.
+- `gf` is very handy to switch scrollable areas on very complex pages ot to move cursot to scrollable area.
 
 - Some sites are using invisible non-hidden text fields (to capture custom keystrokes?), which Vifari recognizes
   as valid text fields and auto-disables Normal mode. In such a case it helps to press `escape` so that this

@@ -222,12 +222,11 @@ local function openUrlInNewTab(url)
   hs.osascript.applescript(script)
 end
 
-local function pasteUrl(url)
-  if url then
-    hs.pasteboard.setContents(url)
-    hs.alert.show("Pasted URL: " .. url, nil, nil, 4)
+local function setClipboardContents(contents)
+  if contents and hs.pasteboard.setContents(contents) then
+    hs.alert.show("Copied to clipboard: " .. contents, nil, nil, 4)
   else
-    hs.alert.show("Failed to get URL", nil, nil, 4)
+    hs.alert.show("Failed to copy to clipboard", nil, nil, 4)
   end
 end
 
@@ -431,7 +430,7 @@ end
 
 function commands.cmdCopyPageUrlToClipboard()
   local axURL = current.axWebArea():attributeValue("AXURL")
-  pasteUrl(axURL.url)
+  setClipboardContents(axURL.url)
 end
 
 function commands.cmdInsertMode(char)
@@ -475,7 +474,7 @@ function commands.cmdCopyLinkUrlToClipboard(char)
   setMode(modes.LINKS, char)
   marks.onClickCallback = function(mark)
     local axURL = mark.element:attributeValue("AXURL")
-    pasteUrl(axURL.url)
+    setClipboardContents(axURL.url)
   end
   hs.timer.doAfter(0, function() marks.show(true) end)
 end

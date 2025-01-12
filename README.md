@@ -58,7 +58,9 @@ spoon.Vifari:start() -- this will add hooks. `:stop()` to remove hooks
 
 5. Refresh local repo sometimes to get the latest version.
 
-6. Enjoy!
+6. Consider configuring your app launcher if needed (Spotlight and Raycast are preconfigured).
+
+7. Enjoy!
 
 
 ## Usage
@@ -74,7 +76,7 @@ is recognized by Vifari as a valid text field). Hit `escape` to unfocus normally
 help - `escape+escape` to force unfocus from any place.
 
 If hjkl doens't work but `f/F/t` show marks, most probably your mouse cursor is out of the scrollable area.
-Use `t` to navigate to some visible element and then use `hjkl`.
+Use `gf` to navigate to some visible element and then use `hjkl`.
 
 If you want to totally disable Vifari do `spoons.Vifari:stop()` in hammerspoon console.
 
@@ -141,6 +143,9 @@ g/f/F/t/y/... - or other symbols show multi-key combination start
   unfocus from any place.
 
 - If something unsolvable happens - hit reload config in Hammerspoon.
+
+- Atm, there is a config for Spotlight and Raycast (as I have those). If somebody will send configs for other
+  app launchers, I will happily add those.
 
 ## Known issues
 

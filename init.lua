@@ -66,6 +66,13 @@ local config = {
   smoothScrollHalfPage = true,
   axEditableRoles = { "AXTextField", "AXComboBox", "AXTextArea" },
   axJumpableRoles = { "AXLink", "AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXMenuItem", "AXTextArea" },
+
+  -- AppLaunchers can be identified based on their app name and window title as:
+  -- ["AppName"] = "Window Title"
+  appLaunchers = {
+    ["Spotlight"] = "Spotlight",
+    ["Raycast"] = "",
+  },
 }
 
 --------------------------------------------------------------------------------
@@ -179,11 +186,24 @@ local function isEditableControlInFocus()
   end
 end
 
-local function isSpotlightActive()
-  local app = hs.application.get("Spotlight")
-  local appElement = hs.axuielement.applicationElement(app)
-  local windows = appElement:attributeValue("AXWindows")
-  return #windows > 0
+local function isAppLauncherActive()
+  for appName, windowTitle in pairs(config.appLaunchers) do
+    local app = hs.application.get(appName)
+
+    if app then
+      local appElement = hs.axuielement.applicationElement(app)
+      local windows = appElement:attributeValue("AXWindows")
+
+      for _, window in ipairs(windows) do
+        if window:attributeValue("AXTitle") == windowTitle then
+          hs.printf("AppLauncher active: %s", appName)
+          return true
+        end
+      end
+    end
+  end
+
+  return false
 end
 
 -- TODO: do some better logic here
@@ -532,7 +552,7 @@ local function eventHandler(event)
     if modifier and key ~= "shift" then return false end
   end
 
-  if isSpotlightActive() then return false end
+  if isAppLauncherActive() then return false end
 
   if event:getKeyCode() == hs.keycodes.map["escape"] then
     local delaySinceLastEscape = (hs.timer.absoluteTime() - lastEscape) / 1e9 -- nanoseconds in seconds

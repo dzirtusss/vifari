@@ -132,7 +132,7 @@ g/f/F/t/y/... - or other symbols show multi-key combination start
 
 ### Tips
 
-- If `hjkl` don't work, most probably mouse cursor is out of the scrollable area. Use `t` to navigate to some
+- If `hjkl` don't work, most probably mouse cursor is out of the scrollable area. Use `gf` to navigate to some
   visible element and then use `hjkl`.
 
 - `gf` is very handy to switch scrollable areas on very complex pages ot to move cursot to scrollable area.

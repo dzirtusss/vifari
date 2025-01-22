@@ -65,7 +65,7 @@ local config = {
   smoothScroll = false,
   smoothScrollHalfPage = true,
   axEditableRoles = { "AXTextField", "AXComboBox", "AXTextArea" },
-  axJumpableRoles = { "AXLink", "AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXMenuItem", "AXTextArea" },
+  axJumpableRoles = { "AXLink", "AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXMenuItem", "AXTextArea", "AXCheckBox" },
 }
 
 --------------------------------------------------------------------------------

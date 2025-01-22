@@ -125,31 +125,37 @@ function current.axFocusedElement()
   return cached.axFocusedElement
 end
 
-local function findAXRole(rootElement, role)
-  if rootElement:attributeValue("AXRole") == role then return rootElement end
+local function findRootElement(rootElement)
+  if rootElement:attributeValue("AXRole") == "AXScrollArea" and not cached.axScrollArea then
+    cached.axScrollArea = rootElement
+  end
+
+  -- AXWebArea for web page
+  if rootElement:attributeValue("AXRole") == "AXWebArea" then return rootElement end
+  -- StartPageCollectionView for start page
+  if rootElement:attributeValue("AXIdentifier") == "StartPageCollectionView" then return rootElement end
 
   for _, child in ipairs(rootElement:attributeValue("AXChildren") or {}) do
-    local result = findAXRole(child, role)
+    local result = findRootElement(child)
     if result then return result end
   end
 end
 
 function current.axScrollArea()
-  cached.axScrollArea = cached.axScrollArea or findAXRole(current.axWindow(), "AXScrollArea")
+  if not cached.axScrollArea then findRootElement(current.axWindow()) end
   return cached.axScrollArea
 end
 
--- webarea path from window: AXWindow>AXSplitGroup>AXTabGroup>AXGroup>AXGroup>AXScrollArea>AXWebArea
-function current.axWebArea()
-  cached.axWebArea = cached.axWebArea or findAXRole(current.axScrollArea(), "AXWebArea") or findAXRole(current.axWindow(), "AXWebArea")
-  return cached.axWebArea
+function current.rootElement()
+  cached.rootElement = cached.rootElement or findRootElement(current.axWindow())
+  return cached.rootElement
 end
 
 function current.visibleArea()
   if cached.visibleArea then return cached.visibleArea end
 
   local winFrame = current.axWindow():attributeValue("AXFrame")
-  local webFrame = current.axWebArea():attributeValue("AXFrame")
+  local webFrame = current.rootElement():attributeValue("AXFrame")
   local scrollFrame = current.axScrollArea():attributeValue("AXFrame")
 
   -- TODO: sometimes it overlaps on scrollbars, need fixing logic on wide pages
@@ -232,8 +238,8 @@ end
 
 local function forceUnfocus()
   logWithTimestamp("forced unfocus on escape")
-  if current.axWebArea() then
-    current.axWebArea():setAttributeValue("AXFocused", true)
+  if current.rootElement() then
+    current.rootElement():setAttributeValue("AXFocused", true)
   end
 end
 
@@ -387,7 +393,7 @@ function marks.findClickableElements(element, withUrls)
 end
 
 function marks.show(withUrls)
-  marks.findClickableElements(current.axWebArea(), withUrls)
+  marks.findClickableElements(current.rootElement(), withUrls)
   marks.draw()
 end
 
@@ -429,7 +435,7 @@ function commands.cmdScrollHalfPageUp()
 end
 
 function commands.cmdCopyPageUrlToClipboard()
-  local axURL = current.axWebArea():attributeValue("AXURL")
+  local axURL = current.rootElement():attributeValue("AXURL")
   setClipboardContents(axURL.url)
 end
 
@@ -440,7 +446,13 @@ end
 function commands.cmdGotoLink(char)
   setMode(modes.LINKS, char)
   marks.onClickCallback = function(mark)
-    mark.element:performAction("AXPress")
+    local result = mark.element:performAction("AXPress")
+
+    -- if there was no AXPress action for element, try to click on the center of the element
+    if result == nil then
+      local point = { x = mark.position.x + mark.position.w / 2, y = mark.position.y + mark.position.h / 2 }
+      hs.eventtap.leftClick(point)
+    end
   end
   hs.timer.doAfter(0, marks.show)
 end

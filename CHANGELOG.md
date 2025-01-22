@@ -1,3 +1,11 @@
+## [0.0.6] - 2025-01-24
+
+- Add support for StartPage (bookmarks, etc)
+- Add fallback to mouse click when no AXPress action is available
+- Improve root element detection
+- Improve char mapping to other non-common symbols
+- Add default mapping of Delete (backspace) to history back
+
 ## [0.0.5] - 2025-01-22
 
 - Fix release version

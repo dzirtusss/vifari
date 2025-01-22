@@ -6,7 +6,7 @@ obj.__index = obj
 --------------------------------------------------------------------------------
 
 obj.name = "vifari"
-obj.version = "0.0.5"
+obj.version = "0.0.6"
 obj.author = "Sergey Tarasov <dzirtusss@gmail.com>"
 obj.homepage = "https://github.com/dzirtusss/vifari"
 obj.license = "MIT - https://opensource.org/licenses/MIT"
@@ -34,6 +34,7 @@ local mapping = {
   ["t"] = { "cmd", "t" },              -- new tab
   ["o"] = { "cmd", "l" },              -- open
   ["["] = { "cmd", "[" },              -- history back
+  ["\x7f"] = { "cmd", "[" },           -- history back (backspace)
   ["]"] = { "cmd", "]" },              -- history forward
   ["g1"] = { "cmd", "1" },
   ["g2"] = { "cmd", "2" },
@@ -66,6 +67,10 @@ local config = {
   smoothScrollHalfPage = true,
   axEditableRoles = { "AXTextField", "AXComboBox", "AXTextArea" },
   axJumpableRoles = { "AXLink", "AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXMenuItem", "AXTextArea", "AXCheckBox" },
+  -- chars that are acceptable for vimLoop
+  -- feel free to add more if needed, and ping me on GH to add to the repo
+  -- \x7f is delete (backspace) on MacBook keyboard
+  acceptableChars = "[%a%d%[%]%$\x7f\"\\']",
 }
 
 --------------------------------------------------------------------------------
@@ -533,7 +538,7 @@ local function vimLoop(char)
   elseif mappingPrefixes[char] then
     setMode(modes.MULTI, char)
   else
-    logWithTimestamp("Unknown char " .. char)
+    logWithTimestamp("Unknown char " .. char .. " (hex: " .. string.format("%02x", string.byte(char)) .. ")")
   end
 end
 
@@ -569,7 +574,7 @@ local function eventHandler(event)
   if current.mode == modes.INSERT or isEditableControlInFocus() then return false end
 
   local char = event:getCharacters()
-  if not char:match("[%a%d%[%]%$]") then return false end
+  if not char:match(config.acceptableChars) then return false end
 
   hs.timer.doAfter(0, function() vimLoop(char) end)
   return true

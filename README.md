@@ -7,12 +7,11 @@ Vimium/Vimari for Safari without browser extension in pure Lua.
 - Not a browser extension - works via accessability API, so most probably will work with
 any Safari version despite past or future Plugin API changes. Theoretically, it
 is even easily adjustable for other browsers. Works in all Safari parts - e.g. doesn't
-stall on empty pages (plans are even to make `f`/`F` work on bookmarks and similar pages,
-scrolling already works there).
+stall on empty pages, works on Start Page (for bookmarks), etc.
 
 - No Swift/XCode - only Lua. Just a single text file.
 
-- No need for Apple Developer account, etc. No distribution.
+- No need for Apple Developer account, etc. No distribution via App Store.
 
 - Fully trustable from security perspective, because it is FOSS with Lua readable by any programmer.
 No keylogging risk and ok to run on sensitive sites with credentials/tokens/etc.
@@ -107,6 +106,7 @@ x - close tab
 t - new tab
 o - open
 [] - back and forward in history
+del (backspace) - back in history
 g1-8 - go to tab 1-8
 g9, g$ - go to last tab
 
@@ -144,8 +144,7 @@ g/f/F/t/y/... - or other symbols show multi-key combination start
 
 - If something unsolvable happens - hit reload config in Hammerspoon.
 
-- Atm, there is a config for Spotlight and Raycast (as I have those). If somebody will send configs for other
-  app launchers, I will happily add those.
+- Bookmarks, reading list, iCloud tabs, etc. are accessible via Start Page where `f` works (not `F`).
 
 ## Known issues
 
@@ -154,9 +153,8 @@ happens in times of Safari's unresponsiveness - e.g. processing a heavy page jus
 
 ## Possible next todo ideas
 
-- Extend marks to bookmarks, reading list, etc. non-web items.
 - Analog of `f` command but for toolbar, tabbar, etc.
-- Bitwarden support by keypress
+- Bitwarden/1Password support by keypress
 
 ## Similar projects
 

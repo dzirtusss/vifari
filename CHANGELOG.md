@@ -1,3 +1,7 @@
+## [0.0.5] - 2025-01-22
+
+- Fix release version
+
 ## [0.0.4] - 2025-01-22
 
 - Rewritten launchers check to be universal

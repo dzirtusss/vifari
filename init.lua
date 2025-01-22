@@ -511,7 +511,7 @@ local function vimLoop(char)
     if type(foundMapping) == "string" then
       commands[foundMapping](char)
     elseif type(foundMapping) == "table" then
-      hs.eventtap.keyStroke(foundMapping[1], foundMapping[2])
+      hs.eventtap.keyStroke(foundMapping[1], foundMapping[2], 0)
     else
       logWithTimestamp("Unknown mapping for " .. char .. " " .. hs.inspect(foundMapping))
     end

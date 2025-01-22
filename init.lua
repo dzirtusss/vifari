@@ -141,7 +141,7 @@ end
 
 -- webarea path from window: AXWindow>AXSplitGroup>AXTabGroup>AXGroup>AXGroup>AXScrollArea>AXWebArea
 function current.axWebArea()
-  cached.axWebArea = cached.axWebArea or findAXRole(current.axScrollArea(), "AXWebArea")
+  cached.axWebArea = cached.axWebArea or findAXRole(current.axScrollArea(), "AXWebArea") or findAXRole(current.axWindow(), "AXWebArea")
   return cached.axWebArea
 end
 

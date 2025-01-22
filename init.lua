@@ -180,7 +180,10 @@ local function isEditableControlInFocus()
 end
 
 local function isSafariWindowActive()
-  return hs.window.focusedWindow():application():name() == "Safari"
+  local win = hs.window.focusedWindow()
+  if not win then return false end
+
+  return win:application():name() == "Safari"
 end
 
 -- TODO: do some better logic here

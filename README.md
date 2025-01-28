@@ -162,6 +162,10 @@ happens in times of Safari's unresponsiveness - e.g. processing a heavy page jus
 - [Vimari](https://github.com/televator-apps/vimari) - Safari clone of Vimium, unfortunately outdated
 - [Vimlike](https://www.jasminestudios.net/vimlike/) - nice but closed source, no info about developer
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=dzirtusss/vifari&type=Date)](https://star-history.com/#dzirtusss/vifari&Date)
+
 ## License
 
 MIT

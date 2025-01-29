@@ -264,6 +264,26 @@ local function forceUnfocus()
   end
 end
 
+local function mergeConfigs(defaultConfig, userConfig)
+  if not userConfig then return defaultConfig end
+
+  local result = {}
+  for k, v in pairs(defaultConfig) do
+    result[k] = type(v) == "table" and hs.fnutils.copy(v) or v
+  end
+
+  for k, v in pairs(userConfig) do
+    if type(v) == "table" and type(result[k]) == "table" then
+      for subK, subV in pairs(v) do
+        result[k][subK] = subV
+      end
+    else
+      result[k] = v
+    end
+  end
+
+  return result
+end
 --------------------------------------------------------------------------------
 -- menubar
 --------------------------------------------------------------------------------
@@ -522,8 +542,8 @@ end
 
 local function fetchMappingPrefixes()
   mappingPrefixes = {}
-  for k, _ in pairs(config.mapping) do
-    if #k == 2 then
+  for k, v in pairs(config.mapping) do
+    if #k == 2 and v ~= false then
       mappingPrefixes[string.sub(k, 1, 1)] = true
     end
   end
@@ -544,6 +564,8 @@ local function vimLoop(char)
 
   if current.mode == modes.MULTI then char = current.multi .. char end
   local foundMapping = config.mapping[char]
+
+  if foundMapping == false then return end
 
   if foundMapping then
     setMode(modes.NORMAL)
@@ -617,7 +639,8 @@ local function onWindowUnfocused()
   setMode(modes.DISABLED)
 end
 
-function obj:start()
+function obj:start(userConfig)
+  config = mergeConfigs(config, userConfig)
   safariFilter = hs.window.filter.new("Safari")
   safariFilter:subscribe(hs.window.filter.windowFocused, onWindowFocused)
   safariFilter:subscribe(hs.window.filter.windowUnfocused, onWindowUnfocused)

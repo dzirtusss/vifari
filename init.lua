@@ -6,7 +6,7 @@ obj.__index = obj
 --------------------------------------------------------------------------------
 
 obj.name = "vifari"
-obj.version = "0.0.6"
+obj.version = "0.0.7"
 obj.author = "Sergey Tarasov <dzirtusss@gmail.com>"
 obj.homepage = "https://github.com/dzirtusss/vifari"
 obj.license = "MIT - https://opensource.org/licenses/MIT"
@@ -61,6 +61,7 @@ local config = {
   doublePressDelay = 0.3, -- seconds
   showLogs = false,
   mapping = mapping,
+  showMenuBarIcon = true,
   scrollStep = 100,
   scrollStepHalfPage = 500,
   smoothScroll = false,
@@ -254,7 +255,9 @@ end
 
 function menuBar.new()
   if menuBar.item then menuBar.delete() end
-  menuBar.item = hs.menubar.new()
+  if config.showMenuBarIcon then
+    menuBar.item = hs.menubar.new()
+  end
 end
 
 function menuBar.delete()
@@ -283,7 +286,9 @@ local function setMode(mode, char)
   if current.mode == modes.MULTI then current.multi = char end
   if current.mode ~= modes.MULTI then current.multi = nil end
 
-  menuBar.item:setTitle(char or defaultModeChars[mode] or "?")
+  if menuBar.item then
+    menuBar.item:setTitle(char or defaultModeChars[mode] or "?")
+  end
 end
 
 --------------------------------------------------------------------------------

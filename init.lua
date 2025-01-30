@@ -66,6 +66,7 @@ local config = {
   scrollStepHalfPage = 500,
   smoothScroll = false,
   smoothScrollHalfPage = true,
+  openNewTabsInBackground = false,
   axEditableRoles = { "AXTextField", "AXComboBox", "AXTextArea" },
   axJumpableRoles = { "AXLink", "AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXMenuItem", "AXTextArea", "AXCheckBox" },
   -- chars that are acceptable for vimLoop
@@ -229,6 +230,20 @@ local function openUrlInNewTab(url)
           set current tab to (make new tab with properties {URL:"%s"})
         end tell
       end tell
+    ]]
+  script = string.format(script, url)
+  hs.osascript.applescript(script)
+end
+
+local function openUrlInNewBackgroundTab(url)
+  local script = [[
+      tell application "Safari"
+        activate
+        tell window 1
+          make new tab with properties {URL:"%s"}
+        end tell
+      end tell
+      return
     ]]
   script = string.format(script, url)
   hs.osascript.applescript(script)
@@ -471,7 +486,7 @@ function commands.cmdGotoLinkNewTab(char)
   setMode(modes.LINKS, char)
   marks.onClickCallback = function(mark)
     local axURL = mark.element:attributeValue("AXURL")
-    openUrlInNewTab(axURL.url)
+    if config.openNewTabsInBackground then openUrlInNewBackgroundTab(axURL.url) else openUrlInNewTab(axURL.url) end
   end
   hs.timer.doAfter(0, function() marks.show(true) end)
 end

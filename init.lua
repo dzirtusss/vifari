@@ -65,6 +65,7 @@ local config = {
   scrollStepHalfPage = 500,
   smoothScroll = false,
   smoothScrollHalfPage = true,
+  showInMenuBar = true,
   axEditableRoles = { "AXTextField", "AXComboBox", "AXTextArea" },
   axJumpableRoles = { "AXLink", "AXButton", "AXPopUpButton", "AXComboBox", "AXTextField", "AXMenuItem", "AXTextArea", "AXCheckBox" },
   -- chars that are acceptable for vimLoop
@@ -283,7 +284,7 @@ local function setMode(mode, char)
   if current.mode == modes.MULTI then current.multi = char end
   if current.mode ~= modes.MULTI then current.multi = nil end
 
-  menuBar.item:setTitle(char or defaultModeChars[mode] or "?")
+  if config.showInMenuBar then menuBar.item:setTitle(char or defaultModeChars[mode] or "?") end
 end
 
 --------------------------------------------------------------------------------
@@ -601,7 +602,7 @@ function obj:start()
   safariFilter = hs.window.filter.new("Safari")
   safariFilter:subscribe(hs.window.filter.windowFocused, onWindowFocused)
   safariFilter:subscribe(hs.window.filter.windowUnfocused, onWindowUnfocused)
-  menuBar.new()
+  if config.showInMenuBar then menuBar.new() end
   fetchMappingPrefixes()
   generateCombinations()
 end
@@ -612,7 +613,7 @@ function obj:stop()
     safariFilter:unsubscribe(onWindowUnfocused)
     safariFilter = nil
   end
-  menuBar.delete()
+  if config.showInMenuBar then menuBar.delete() end
 end
 
 return obj

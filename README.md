@@ -166,6 +166,15 @@ happens in times of Safari's unresponsiveness - e.g. processing a heavy page jus
 
 [![Star History Chart](https://api.star-history.com/svg?repos=dzirtusss/vifari&type=Date)](https://star-history.com/#dzirtusss/vifari&Date)
 
+## Contributors
+
+<a href = "https://github.com/Tanu-N-Prabhu/Python/graphs/contributors">
+  <img src = "https://contrib.rocks/image?repo=dzirtusss/vifari"/>
+</a>
+
+Made with [contributors-img](https://contrib.rocks).
+
+
 ## License
 
 MIT

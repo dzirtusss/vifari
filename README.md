@@ -11,7 +11,7 @@ stall on empty pages, works on Start Page (for bookmarks), etc.
 
 - No Swift/XCode - only Lua. Just a single text file.
 
-- No need for Apple Developer account, etc. No distribution via App Store.
+- No need for Apple Developer account, etc. No distribution via App Store needed.
 
 - Fully trustable from security perspective, because it is FOSS with Lua readable by any programmer.
 No keylogging risk and ok to run on sensitive sites with credentials/tokens/etc.
@@ -35,6 +35,19 @@ Which minimizes their usefulness and only creates anger of switching back&forth 
 
 ## Installation
 
+### brew
+
+`brew install dzirtusss/tap/vifari`
+
+NOTE: This is a cask, not a formula, because it depends on `hammerspoon` which is
+as well a cask, and needs to be installed to `~/.hammerspoon/Spoons/Vifari.spoon/...` folder.
+
+Update with `brew cu vifari` (to latest release)
+
+PS: I've just added brew formula, so please open issue if you have any problems.
+
+### Manual
+
 1. Install [Hammerspoon](https://www.hammerspoon.org/) e.g. as `brew install hammerspoon`
 
 2. Get this repo, either of:
@@ -46,7 +59,11 @@ Which minimizes their usefulness and only creates anger of switching back&forth 
 
   - just copy `init.lua` to `~/.hammerspoon/Spoons/Vifari.spoon/init.lua`
 
-3. Add to your `~/.hammerspoon/init.lua`:
+Update with `git pull` to latest main branch.
+
+## Configuration
+
+Add to your `~/.hammerspoon/init.lua`:
 ```lua
 hs.loadSpoon("Vifari")
 spoon.Vifari:start() -- this will add hooks. `:stop()` to remove hooks

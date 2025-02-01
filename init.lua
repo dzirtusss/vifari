@@ -6,7 +6,7 @@ obj.__index = obj
 --------------------------------------------------------------------------------
 
 obj.name = "vifari"
-obj.version = "0.0.7"
+obj.version = "0.0.8"
 obj.author = "Sergey Tarasov <dzirtusss@gmail.com>"
 obj.homepage = "https://github.com/dzirtusss/vifari"
 obj.license = "MIT - https://opensource.org/licenses/MIT"

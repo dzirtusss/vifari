@@ -1,3 +1,10 @@
+## [0.0.8] - 2025-02-01
+- Add option to open new tabs in the background (thanks to alecdwm)
+- Add ability to keep local configurations in hammerspoon init.lua
+
+## [0.0.7] - 2025-01-30
+- Add option to disable menubar icon
+
 ## [0.0.6] - 2025-01-24
 
 - Add support for StartPage (bookmarks, etc)

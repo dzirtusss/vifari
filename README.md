@@ -196,7 +196,7 @@ happens in times of Safari's unresponsiveness - e.g. processing a heavy page jus
 
 ## Contributors
 
-<a href = "https://github.com/Tanu-N-Prabhu/Python/graphs/contributors">
+<a href = "https://github.com/dzirtusss/vifari/graphs/contributors">
   <img src = "https://contrib.rocks/image?repo=dzirtusss/vifari"/>
 </a>
 

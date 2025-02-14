@@ -50,6 +50,7 @@ local mapping = {
   ["f"] = "cmdGotoLink",
   ["F"] = "cmdGotoLinkNewTab",
   ["gf"] = "cmdMoveMouseToLink",
+  ["gi"] = "cmdFocusInput",
   -- mouse
   ["zz"] = "cmdMoveMouseToCenter",
   -- clipboard
@@ -183,6 +184,28 @@ function current.visibleArea()
 
   return cached.visibleArea
 end
+
+local function findRoleElement(rootElement, role)
+  if rootElement:attributeValue("AXRole") == role then return rootElement end
+
+  for _, child in ipairs(rootElement:attributeValue("AXChildren") or {}) do
+    local result = findRoleElement(child, role)
+    if result then return result end
+  end
+end
+
+function current.axEditableElement()
+  local function findVisibleElement(role)
+    local element = findRoleElement(current.rootElement(), role)
+    return element and marks.isElementPartiallyVisible(element) and element
+  end
+  cached.axEditableElement = cached.axEditableElement
+    or findVisibleElement("AXTextField")
+    or findVisibleElement("AXComboBox")
+    or findVisibleElement("AXTextArea")
+  return cached.axEditableElement
+end
+
 
 local function isEditableControlInFocus()
   if current.axFocusedElement() then
@@ -534,6 +557,13 @@ function commands.cmdCopyLinkUrlToClipboard(char)
     setClipboardContents(axURL.url)
   end
   hs.timer.doAfter(0, function() marks.show(true) end)
+end
+
+function commands.cmdFocusInput()
+  if current.axEditableElement() then
+    forceUnfocus()
+    current.axEditableElement():setAttributeValue("AXFocused", true)
+  end
 end
 
 --------------------------------------------------------------------------------

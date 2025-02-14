@@ -126,6 +126,7 @@ gg/G - scroll to top/bottom
 f - show marks and jump in same window
 F - show marks and jump in new window
 gf - show marks and move mouse to the mark
+gi - focus the first text input
 
 # tabs
 q/w - prev/next tab

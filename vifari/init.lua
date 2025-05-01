@@ -224,13 +224,16 @@ end
 
 -- TODO: do some better logic here
 local function generateCombinations()
+  -- generate all two-letter combinations a–z
   local chars = "abcdefghijklmnopqrstuvwxyz"
-  allCombinations = {}
+  local combos = {}
   for i = 1, #chars do
     for j = 1, #chars do
-      table.insert(allCombinations, chars:sub(i, i) .. chars:sub(j, j))
+      table.insert(combos, chars:sub(i, i) .. chars:sub(j, j))
     end
   end
+  allCombinations = combos
+  return combos
 end
 
 local function smoothScroll(x, y, smooth)
@@ -570,14 +573,21 @@ end
 --- vifari
 --------------------------------------------------------------------------------
 
-local function fetchMappingPrefixes()
-  mappingPrefixes = {}
-  for k, v in pairs(config.mapping) do
+local function fetchMappingPrefixes(inMapping)
+  -- build a map of two-character key prefixes
+  local m = inMapping or config.mapping
+  local prefixes = {}
+  for k, v in pairs(m) do
     if #k == 2 and v ~= false then
-      mappingPrefixes[string.sub(k, 1, 1)] = true
+      prefixes[string.sub(k, 1, 1)] = true
     end
   end
-  logWithTimestamp("mappingPrefixes: " .. hs.inspect(mappingPrefixes))
+  mappingPrefixes = prefixes
+  -- only call inspect if it exists (tests don’t stub it)
+  if hs.inspect then
+    logWithTimestamp("mappingPrefixes: " .. hs.inspect(prefixes))
+  end
+  return prefixes
 end
 
 local function vimLoop(char)
@@ -687,5 +697,14 @@ function obj:stop()
   end
   menuBar.delete()
 end
+
+-- expose pure helper functions for testing
+obj.helpers = {
+  tblContains = tblContains,
+  mergeConfigs = mergeConfigs,
+  generateCombinations = generateCombinations,
+  fetchMappingPrefixes = fetchMappingPrefixes,
+  acceptableChars = config.acceptableChars,
+}
 
 return obj

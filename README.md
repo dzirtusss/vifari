@@ -105,7 +105,7 @@ help - `escape+escape` to force unfocus from any place.
 If hjkl doens't work but `f/F/t` show marks, most probably your mouse cursor is out of the scrollable area.
 Use `gf` to navigate to some visible element and then use `hjkl`.
 
-If you want to totally disable Vifari do `spoons.Vifari:stop()` in hammerspoon console.
+If you want to totally disable Vifari do `spoon.Vifari:stop()` in hammerspoon console.
 
 ### Current binds:
 
